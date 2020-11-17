@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: traefik-ingress-controller
+  namespace: traefik
+  labels:
+    k8s-app: traefik-ingress-lb
+    kubernetes.io/cluster-service: "true"
+spec:
+  selector:
+    matchLabels:
+       k8s-app: traefik-ingress-lb
+  template:
+    metadata:
+      labels:
+        k8s-app: traefik-ingress-lb
+        name: traefik-ingress-lb
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      serviceAccountName: traefik-ingress-controller
+      terminationGracePeriodSeconds: 60
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      containers:
+      - image: traefik:latest
+        name: traefik-ingress-lb
+        imagePullPolicy: Always
+        volumeMounts:
+          - mountPath: "/cert/"
+            name: glusterfsvol
+        resources:
+          requests:
+            cpu: 100m
+            memory: 20Mi
+        args:
+        - --providers.kubernetescrd
+        - --entrypoints.web.address=:80
+        - --entrypoints.websecure.address=:443
+        #- --entryPoints.web.forwardedHeaders.trustedIPs=127.0.0.1/32,192.168.0.0/24
+        - --api.insecure
+        - --certificatesresolvers.myresolver.acme.email=liam.mail.1337@gmail.com
+        - --certificatesresolvers.myresolver.acme.storage=/cert/acme.json
+        #- --certificatesresolvers.myresolver.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory
+        #- --certificatesresolvers.myresolver.acme.tlschallenge
+        - --certificatesresolvers.myresolver.acme.keytype=RSA4096
+        - --log.level=DEBUG 
+        - --certificatesresolvers.myresolver.acme.httpchallenge=true
+        - --certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web
+      volumes:
+      - name: glusterfsvol
+        glusterfs:
+          endpoints: glusterfs-cluster
+          path: gv0
+          readOnly: false
+      #- name: cert
+      #  hostPath:
+      #    path: /etc/traefik/acme/
+      #    type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik-web-ui
+  namespace: traefik
+spec:
+  selector:
+    k8s-app: traefik-ingress-lb
+    app: traefik-ingress-lb
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: api
+  - port: 443
+    targetPort: 443
+    name: websecure
+  - port: 80
+    targetPort: 80
+    name: web
+ 

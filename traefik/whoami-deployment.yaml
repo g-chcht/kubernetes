@@ -1,0 +1,68 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  namespace: default
+  name: whoami
+  labels:
+    app: whoami
+
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: whoami
+  template:
+    metadata:
+      labels:
+        app: whoami
+    spec:
+      containers:
+        - name: whoami
+          image: traefik/whoami
+          ports:
+            - name: web
+              containerPort: 80
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: whoami
+spec:
+  ports:
+  - port: 80
+    name: web
+    protocol: TCP
+  selector:
+    app: whoami
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: whoami-web
+spec:
+  entryPoints:
+    - web
+  routes:
+  - kind: Rule
+    match: Host(`mydomain.com`) && PathPrefix(`/notls`)
+    #match: PathPrefix(`/notls`)
+    services:
+    - name: whoami
+      port: 80
+---
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: whoami-web-tls
+spec:
+  entryPoints:
+    - websecure
+  routes:
+  - kind: Rule
+    match: Host(`mydomain.com`) && PathPrefix(`/tls`)
+    services:
+    - name: whoami
+      port: 80
+  tls:
+    certResolver: myresolver
+
